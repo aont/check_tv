@@ -52,14 +52,14 @@ if __name__ == u'__main__':
     pg_cur = pg_conn.cursor()
     
     check_tv_data = pg_init_json(pg_cur, table_name, key_name)
-    rss_list = check_tv_data.get(u"rss_list")
-    if rss_list is None:
-        rss_list = []
-        check_tv_data[u"rss_list"] = rss_list
+    keyword_list = check_tv_data.get(u"keyword_list")
+    if keyword_list is None:
+        keyword_list = []
+        check_tv_data[u"keyword_list"] = keyword_list
 
     for rss in sys.argv[1:]:
-        if rss not in rss_list:
-            rss_list.append(rss)
+        if rss not in keyword_list:
+            keyword_list.append(rss)
 
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     sys.stderr.write("[info] check_tv_data=%s\n" % check_tv_data)

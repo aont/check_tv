@@ -7,6 +7,7 @@ import psycopg2
 import json
 import os
 import requests
+import urllib.parse
 
 class LINE(object):
     def __init__(self, sess, line_notify_token):
@@ -71,11 +72,21 @@ def pg_init_json(pg_cur, table_name, key_name):
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
     return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data), key_name])
 
+def keyword2rss(keyword_list):
+    rss_list = []
+    base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
+    for keyword in keyword_list:
+        rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 1))
+        rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 2))
+    return rss_list
+
 if __name__ == u'__main__':
 
     line_sess = requests.session()
     line_notify_token = os.environ[u'LINE_TOKEN']
     line = LINE(line_sess, line_notify_token)
+
+    tv_sonet_base = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
 
     pg_url = os.environ[u'DATABASE_URL']
     table_name = u'generic_text_data'
@@ -89,11 +100,11 @@ if __name__ == u'__main__':
         checked_previously = []
     checked_thistime = []
 
-    rss_list = check_tv_data.get(u"rss_list")
-    if rss_list is None:
-        rss_list = []
+    keyword_list = check_tv_data.get(u"keyword_list")
+    if keyword_list is None:
+        keyword_list = []
 
-    for rssurl in rss_list:
+    for rssurl in keyword2rss(keyword_list):
         sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
         d = feedparser.parse(rssurl)
 
