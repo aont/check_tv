@@ -57,9 +57,21 @@ if __name__ == u'__main__':
         keyword_list = []
         check_tv_data[u"keyword_list"] = keyword_list
 
-    for rss in sys.argv[1:]:
-        if rss not in keyword_list:
-            keyword_list.append(rss)
+    filter_channel_list = check_tv_data.get(u"filter_channel_list")
+    if filter_channel_list is None:
+        filter_channel_list = []
+        check_tv_data[u"filter_channel_list"] = filter_channel_list
+
+    filter_title_list = check_tv_data.get(u"filter_title_list")
+    if filter_title_list is None:
+        filter_title_list = []
+        check_tv_data[u"filter_title_list"] = filter_title_list
+
+    filter_channel_list.append(u"some_channel")
+
+    filter_title_list.append(u"some_title")
+
+    keyword_list.append(u"some_keyword")
 
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     sys.stderr.write("[info] check_tv_data=%s\n" % check_tv_data)
