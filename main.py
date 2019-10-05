@@ -9,6 +9,7 @@ import os
 import requests
 import urllib.parse
 import sendgrid
+import re
 
 def str_abbreviate(str_in):
     len_str_in = len(str_in)
@@ -43,7 +44,7 @@ def pg_init_json(pg_cur, table_name, key_name):
     return pg_data
 
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
-    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data), key_name])
+    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data, ensure_ascii=False), key_name])
 
 def keyword2rss(keyword_list):
     rss_list = []
@@ -89,15 +90,19 @@ if __name__ == u'__main__':
     if filter_title_list is None:
         filter_title_list = []
 
-
+    url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
     for rssurl in keyword2rss(keyword_list):
         sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
         d = feedparser.parse(rssurl)
 
         for entry in d['entries']:
-            checked_thistime.append(entry.link)
-            if entry.link in checked_previously:
+            url_match = url_pat.match(entry.link)
+            url_num = url_match.group(1)
+            if url_match is None:
+                raise Exception(u'unexpected')
+            checked_thistime.append(url_num)
+            if url_num in checked_previously:
                 sys.stderr.write("[info] skipping %s (checked previously)\n" % (entry.title))
                 continue
             elif not filter_channel(entry.summary, filter_channel_list):
