@@ -52,17 +52,15 @@ def keyword2rss(keyword_list):
         rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0))
     return rss_list
 
-def filter_channel(summary):
-    filter_channels = ["ＮＨＫ総合１・東京(Ch.1)","ＮＨＫＥテレ１・東京(Ch.2)","日テレ(Ch.4)","テレビ朝日(Ch.5)","ＴＢＳ(Ch.6)","テレビ東京(Ch.7)","フジテレビ(Ch.8)","ＴＯＫＹＯ　ＭＸ１(Ch.9)",\
-        "ＮＨＫ ＢＳ１(Ch.1)","ＮＨＫ ＢＳプレミアム(Ch.3)","ＢＳ日テレ(Ch.4)","ＢＳ朝日(Ch.5)","ＢＳ-ＴＢＳ(Ch.6)","ＢＳテレ東(Ch.7)","ＢＳフジ(Ch.8)","BS11イレブン(Ch.11)","BS12 トゥエルビ(Ch.12)","BSキャンパスex"]
+def filter_channel(summary, filter_channels):
     for channel in filter_channels:
         ret = summary.find(channel)
         if ret != -1:
             return True
     return False
 
-def filter_program(entry):
-    if entry.title == u"NHKニュース　おはよう日本":
+def filter_title(title, filter_title_list):
+    if title in filter_title_list:
         return False
     return True
 
@@ -83,6 +81,15 @@ if __name__ == u'__main__':
     if keyword_list is None:
         keyword_list = []
 
+    filter_channel_list = check_tv_data.get(u"filter_channel_list")
+    if filter_channel_list is None:
+        filter_channel_list = []
+
+    filter_title_list = check_tv_data.get(u"filter_title_list")
+    if filter_title_list is None:
+        filter_title_list = []
+
+
     messages = []
     for rssurl in keyword2rss(keyword_list):
         sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
@@ -93,10 +100,10 @@ if __name__ == u'__main__':
             if entry.link in checked_previously:
                 sys.stderr.write("[info] skipping %s (checked previously)\n" % (entry.title))
                 continue
-            elif not filter_channel(entry.summary):
+            elif not filter_channel(entry.summary, filter_channel_list):
                 sys.stderr.write("[info] skipping  %s (%s) (channnel is filtered)\n" % (entry.title, entry.summary))
                 continue
-            elif not filter_program(entry):
+            elif not filter_title(entry.title, filter_title_list):
                 sys.stderr.write("[info] skipping  %s (program is filtered)\n" % (entry.title))
                 continue
             else:
