@@ -8,34 +8,7 @@ import json
 import os
 import requests
 import urllib.parse
-
-class LINE(object):
-    def __init__(self, sess, line_notify_token):
-        self.sess = sess
-        self.line_notify_token = line_notify_token
-        self.line_notify_api = u'https://notify-api.line.me/api/notify'
-        self.headers = {u'Authorization': u'Bearer ' + line_notify_token}
-
-    def notify(self, message):
-        # print message
-        # return
-        sys.stderr.write(u'[info] line notify: %s\n' % message)
-        for t in range(5):
-            try:
-                line_notify = self.sess.post(self.line_notify_api, data = {u'message': message}, headers = self.headers)
-                if requests.codes.ok != line_notify.status_code:
-                    sys.stderr.write(u"[info] line status_code = %s\n" % line_notify.status_code)
-                    sys.stderr.write(u"[info] wait for 5s and retry\n")
-                    # sys.stderr.flush()
-                    time.sleep(5)
-                    continue
-
-                break
-            except requests.exceptions.ConnectionError as e:
-                sys.stderr.write(u"[warn] LINE ConnectionError occured. retrying...\n")
-                sys.stderr.write(traceback.format_exc())
-                # sys.stderr.flush()
-                continue
+import sendgrid
 
 def str_abbreviate(str_in):
     len_str_in = len(str_in)
@@ -77,8 +50,6 @@ def keyword2rss(keyword_list):
     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
     for keyword in keyword_list:
         rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0))
-        # rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 1))
-        # rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 2))
     return rss_list
 
 def filter_channel(summary):
@@ -96,14 +67,6 @@ def filter_program(entry):
     return True
 
 if __name__ == u'__main__':
-
-    line_sess = requests.session()
-    line_notify_token = os.environ[u'LINE_TOKEN']
-    line = LINE(line_sess, line_notify_token)
-
-    tv_sonet_base = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
-
-
     pg_url = os.environ[u'DATABASE_URL']
     table_name = u'generic_text_data'
     key_name = u'check_tv'
@@ -120,6 +83,7 @@ if __name__ == u'__main__':
     if keyword_list is None:
         keyword_list = []
 
+    messages = []
     for rssurl in keyword2rss(keyword_list):
         sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
         d = feedparser.parse(rssurl)
@@ -136,11 +100,23 @@ if __name__ == u'__main__':
                 sys.stderr.write("[info] skipping  %s (program is filtered)\n" % (entry.title))
                 continue
             else:
-                line.notify(u"%s\n%s" % (entry.title, entry.link))
-        
+                mes = u"<a href=\"%s\">%s</a>" % (entry.link, entry.title)
+                messages.append(mes)
+
     check_tv_data[u'checked_previously'] = checked_thistime
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     
     pg_cur.close()
     pg_conn.commit()
     pg_conn.close()
+
+    if len(messages)>0:
+        message_str = "<br />\n".join(messages)
+        sys.stderr.write(u"[info] mailing via sendgrid\n")
+        sg_username = os.environ["SENDGRID_USERNAME"]
+        sg_recipient = os.environ["SENDGRID_RECIPIENT"]
+        sg_apikey = os.environ["SENDGRID_APIKEY"]
+        sg_client = sendgrid.SendGridAPIClient(sg_apikey)
+        sg_from = u"\"Check TV Programs\" <%s>"%sg_username
+        message = sendgrid.Mail(from_email=sg_from, to_emails=[sg_recipient], subject=u"Update of TV Programs", html_content=message_str)
+        sg_client.send(message)
