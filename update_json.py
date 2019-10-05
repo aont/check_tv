@@ -51,27 +51,9 @@ if __name__ == u'__main__':
     pg_conn = psycopg2.connect(pg_url)
     pg_cur = pg_conn.cursor()
     
-    check_tv_data = pg_init_json(pg_cur, table_name, key_name)
-    keyword_list = check_tv_data.get(u"keyword_list")
-    if keyword_list is None:
-        keyword_list = []
-        check_tv_data[u"keyword_list"] = keyword_list
-
-    filter_channel_list = check_tv_data.get(u"filter_channel_list")
-    if filter_channel_list is None:
-        filter_channel_list = []
-        check_tv_data[u"filter_channel_list"] = filter_channel_list
-
-    filter_title_list = check_tv_data.get(u"filter_title_list")
-    if filter_title_list is None:
-        filter_title_list = []
-        check_tv_data[u"filter_title_list"] = filter_title_list
-
-    filter_channel_list.append(u"some_channel")
-
-    filter_title_list.append(u"some_title")
-
-    keyword_list.append(u"some_keyword")
+    # check_tv_data = 
+    pg_init_json(pg_cur, table_name, key_name)
+    check_tv_data = json.loads(sys.stdin.read())
 
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     sys.stderr.write("[info] check_tv_data=%s\n" % check_tv_data)
