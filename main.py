@@ -129,7 +129,7 @@ if __name__ == u'__main__':
         sg_recipient = os.environ["SENDGRID_RECIPIENT"]
         sg_apikey = os.environ["SENDGRID_APIKEY"]
         sg_client = sendgrid.SendGridAPIClient(sg_apikey)
-        sg_from = u"\"Check TV Programs\" <%s>"%sg_username
+        sg_from = sendgrid.Email(name="Check Kindle Price", email=sg_username)
         message = sendgrid.Mail(from_email=sg_from, to_emails=[sg_recipient], subject=u"Update of TV Programs", html_content=message_str)
         message.reply_to.email = sg_recipient
         sg_client.send(message)
