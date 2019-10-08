@@ -119,8 +119,6 @@ if __name__ == u'__main__':
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     
     pg_cur.close()
-    pg_conn.commit()
-    pg_conn.close()
 
     if len(messages)>0:
         message_str = "<br />\n".join(messages)
@@ -133,3 +131,6 @@ if __name__ == u'__main__':
         message = sendgrid.Mail(from_email=sg_from, to_emails=[sg_recipient], subject=u"Update of TV Programs", html_content=message_str)
         message.reply_to = sg_recipient
         sg_client.send(message)
+    
+    pg_conn.commit()
+    pg_conn.close()
