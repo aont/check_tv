@@ -101,6 +101,9 @@ if __name__ == u'__main__':
             url_num = url_match.group(1)
             if url_match is None:
                 raise Exception(u'unexpected')
+            if url_num in checked_thistime:
+                sys.stderr.write("[info] skipping %s (duplicate)\n" % (entry.title))
+                continue
             checked_thistime.append(url_num)
             if url_num in checked_previously:
                 sys.stderr.write("[info] skipping %s (checked previously)\n" % (entry.title))
