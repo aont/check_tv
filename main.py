@@ -159,7 +159,7 @@ if __name__ == u'__main__':
             # time.sleep(1)
             if result.status_code != requests.status_codes.codes.get("ok"):
                 raise Exception('unexpected')
-            sys.stderr.write("[html]\n%s\n" % result.text)
+            #sys.stderr.write("[html]\n%s\n" % result.text)
             html = lxml.html.fromstring(result.text, base_url=entry.link)
 
             if not check_text_match(entry.title, keyword_list):
