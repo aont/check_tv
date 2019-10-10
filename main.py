@@ -10,6 +10,9 @@ import requests
 import urllib.parse
 import sendgrid
 import re
+import lxml
+import lxml.html
+import time
 
 def str_abbreviate(str_in):
     len_str_in = len(str_in)
@@ -65,10 +68,39 @@ def filter_title(title, filter_title_list):
         return False
     return True
 
+def check_text_match(txt, keyword_list):
+    for keyword in keyword_list:
+        if -1 != txt.find(keyword):
+            sys.stderr.write("[info] %s matches\n" % keyword)
+            return True
+    return False
+
+
+def check_match(html, node_text, keyword_list):
+    detail_node_result = html.xpath('//*[*[text() = "%s"]]' % node_text)
+    if len(detail_node_result) == 1:
+        detail_node = detail_node_result[0]
+        detail_node_html = lxml.etree.tostring(detail_node, encoding='utf-8').decode('utf-8')
+        if check_text_match(detail_node_html, keyword_list):
+            return True
+    return False
+
+
 if __name__ == u'__main__':
+
+    headers = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
+        'accept-encoding': 'gzip, deflate, br',
+        'accept-language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+        'referer': 'https://tv.so-net.ne.jp/',
+    }
     pg_url = os.environ[u'DATABASE_URL']
     table_name = u'generic_text_data'
     key_name = u'check_tv'
+    sg_username = os.environ["SENDGRID_USERNAME"]
+    sg_recipient = os.environ["SENDGRID_RECIPIENT"]
+    sg_apikey = os.environ["SENDGRID_APIKEY"]
     pg_conn = psycopg2.connect(pg_url)
     pg_cur = pg_conn.cursor()
 
@@ -92,32 +124,58 @@ if __name__ == u'__main__':
 
     url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
+    sess = requests.session()
     for rssurl in keyword2rss(keyword_list):
         sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
         d = feedparser.parse(rssurl)
 
         for entry in d['entries']:
+
             url_match = url_pat.match(entry.link)
             url_num = url_match.group(1)
+
             if url_match is None:
                 raise Exception(u'unexpected')
             if url_num in checked_thistime:
                 sys.stderr.write("[info] skipping %s (duplicate)\n" % (entry.title))
                 continue
-            checked_thistime.append(url_num)
+
             if url_num in checked_previously:
                 sys.stderr.write("[info] skipping %s (checked previously)\n" % (entry.title))
+                checked_thistime.append(url_num)
                 continue
             elif not filter_channel(entry.summary, filter_channel_list):
                 sys.stderr.write("[info] skipping  %s (%s) (channnel is filtered)\n" % (entry.title, entry.summary))
+                checked_thistime.append(url_num)
                 continue
             elif not filter_title(entry.title, filter_title_list):
                 sys.stderr.write("[info] skipping  %s (program is filtered)\n" % (entry.title))
+                checked_thistime.append(url_num)
                 continue
-            else:
-                mes = u"<a href=\"%s\">%s</a>" % (entry.link, entry.title)
-                messages.append(mes)
 
+
+            sys.stderr.write("[url] %s\n" % entry.link)
+            result = sess.get(entry.link, headers=headers)
+            # time.sleep(1)
+            if result.status_code != requests.status_codes.codes.get("ok"):
+                raise Exception('unexpected')
+            sys.stderr.write("[html]\n%s\n" % result.text)
+            html = lxml.html.fromstring(result.text, base_url=entry.link)
+
+            if not check_text_match(entry.title, keyword_list):
+                if not check_match(html, "番組概要", keyword_list):
+                    if not check_match(html, "人名リンク", keyword_list):
+                        if not check_match(html, "番組詳細", keyword_list):
+                            sys.stderr.write("[info] skipping %s (no matching keyword)\n" % entry.link)
+                            # checked_thistime.append(url_num)
+                            # input("")
+                            continue
+            
+            checked_thistime.append(url_num)
+            mes = u"<a href=\"%s\">%s</a>" % (entry.link, entry.title)
+            messages.append(mes)
+
+    sess.close()
     check_tv_data[u'checked_previously'] = checked_thistime
     pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     
@@ -126,11 +184,8 @@ if __name__ == u'__main__':
     if len(messages)>0:
         message_str = "<br />\n".join(messages)
         sys.stderr.write(u"[info] mailing via sendgrid\n")
-        sg_username = os.environ["SENDGRID_USERNAME"]
-        sg_recipient = os.environ["SENDGRID_RECIPIENT"]
-        sg_apikey = os.environ["SENDGRID_APIKEY"]
         sg_client = sendgrid.SendGridAPIClient(sg_apikey)
-        sg_from = sendgrid.Email(name="Check Kindle Price", email=sg_username)
+        sg_from = sendgrid.Email(name="Check TV Programs", email=sg_username)
         message = sendgrid.Mail(from_email=sg_from, to_emails=[sg_recipient], subject=u"Update of TV Programs", html_content=message_str)
         message.reply_to = sg_recipient
         sg_client.send(message)
