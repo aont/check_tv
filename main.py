@@ -13,6 +13,9 @@ import re
 import lxml
 import lxml.html
 import time
+import gspread
+import oauth2client.service_account
+
 
 def str_abbreviate(str_in):
     len_str_in = len(str_in)
@@ -75,6 +78,27 @@ def check_text_match(txt, keyword_list):
             return True
     return False
 
+def get_cells_from_sheet(worksheet):
+    return worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(worksheet.row_count, worksheet.col_count))
+
+def get_items_from_sheet(worksheet):
+    # return [cell.value for cell in get_cells_from_sheet(worksheet)]
+    items = []
+    for cell in get_cells_from_sheet(worksheet):
+        if cell.value:
+            items.append(cell.value)
+    return items
+
+def update_sheet(worksheet, data):
+    # worksheet.resize(1)
+    num_data = len(data)
+    sys.stderr.write("[info] update_sheet len=%s\n" % len(data))
+    worksheet.clear()
+    worksheet.resize(rows=num_data)
+    cells = get_cells_from_sheet(worksheet)
+    for i in range(num_data):
+        cells[i].value = data[i]
+    worksheet.update_cells(cells)
 
 def check_match(html, node_text, keyword_list):
     detail_node_result = html.xpath('//*[*[text() = "%s"]]' % node_text)
@@ -97,30 +121,57 @@ if __name__ == u'__main__':
     }
     pg_url = os.environ[u'DATABASE_URL']
     table_name = u'generic_text_data'
-    key_name = u'check_tv'
+
+    google_key_key_name = u'check_tv_google_key'
     sg_username = os.environ["SENDGRID_USERNAME"]
     sg_recipient = os.environ["SENDGRID_RECIPIENT"]
     sg_apikey = os.environ["SENDGRID_APIKEY"]
     pg_conn = psycopg2.connect(pg_url)
     pg_cur = pg_conn.cursor()
 
-    check_tv_data = pg_init_json(pg_cur, table_name, key_name)
-    checked_previously = check_tv_data.get(u"checked_previously")
-    if checked_previously is None:
-        checked_previously = []
+    google_key_json = pg_init_json(pg_cur, table_name, google_key_key_name)
+    scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+    credentials = oauth2client.service_account.ServiceAccountCredentials.from_json_keyfile_dict(google_key_json, scope)
+    gc = gspread.authorize(credentials)
+
+    google_spreadsheet_key = os.environ[u'SPREADSHEET_KEY']
+    worksheets = gc.open_by_key(google_spreadsheet_key).worksheets()
+    checked_previously = []
+    for worksheet in worksheets:
+        if "check-tv-checked-previously"==worksheet.title:
+            worksheet_checked_previously = worksheet
+            checked_previously = get_items_from_sheet(worksheet)
+            # sys.stderr.write("[info] checked_previously=%s\n" % checked_previously)
+        elif "check-tv-keyword"==worksheet.title:
+            worksheet_keyword = worksheet
+            keyword_list = get_items_from_sheet(worksheet)
+            sys.stderr.write("[info] keyword_list=%s\n" % keyword_list)
+        elif "check-tv-filter-title"==worksheet.title:
+            worksheet_filter_title = worksheet
+            filter_title_list = get_items_from_sheet(worksheet)
+            sys.stderr.write("[info] filter_title_list=%s\n" % filter_title_list)
+        elif "check-tv-filter-channel"==worksheet.title:
+            worksheet_filter_channel = worksheet
+            filter_channel_list = get_items_from_sheet(worksheet)
+            sys.stderr.write("[info] filter_channel_list=%s\n" % filter_channel_list)
+
+    # check_tv_data = pg_init_json(pg_cur, table_name, key_name)
+    # checked_previously = check_tv_data.get(u"checked_previously")
+    # if checked_previously is None:
+    #     checked_previously = []
     checked_thistime = []
 
-    keyword_list = check_tv_data.get(u"keyword_list")
-    if keyword_list is None:
-        keyword_list = []
+    # keyword_list = check_tv_data.get(u"keyword_list")
+    # if keyword_list is None:
+    #     keyword_list = []
 
-    filter_channel_list = check_tv_data.get(u"filter_channel_list")
-    if filter_channel_list is None:
-        filter_channel_list = []
+    # filter_channel_list = check_tv_data.get(u"filter_channel_list")
+    # if filter_channel_list is None:
+    #     filter_channel_list = []
 
-    filter_title_list = check_tv_data.get(u"filter_title_list")
-    if filter_title_list is None:
-        filter_title_list = []
+    # filter_title_list = check_tv_data.get(u"filter_title_list")
+    # if filter_title_list is None:
+    #     filter_title_list = []
 
     url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
@@ -176,8 +227,8 @@ if __name__ == u'__main__':
             messages.append(mes)
 
     sess.close()
-    check_tv_data[u'checked_previously'] = checked_thistime
-    pg_update_json(pg_cur, table_name, key_name, check_tv_data)
+    # check_tv_data[u'checked_previously'] = checked_thistime
+    # pg_update_json(pg_cur, table_name, key_name, check_tv_data)
     
     pg_cur.close()
 
@@ -190,5 +241,6 @@ if __name__ == u'__main__':
         message.reply_to = sg_recipient
         sg_client.send(message)
     
+    update_sheet(worksheet_checked_previously, checked_thistime)
     pg_conn.commit()
     pg_conn.close()

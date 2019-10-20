@@ -3,3 +3,5 @@ psycopg2
 requests
 sendgrid
 lxml
+gspread
+oauth2client
