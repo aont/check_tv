@@ -24,33 +24,37 @@ def str_abbreviate(str_in):
     else:
         return str_in
 
-def pg_execute(pg_cur, query, param=None):
+def pg_execute(pg_cur, query, param=None, show=True):
     param_str = str_abbreviate("%s" % param)
-    sys.stderr.write(u'[info] postgres: %s param=%s\n' % (query, param_str))
+    if show:
+        sys.stderr.write(u'[info] postgres: %s param=%s\n' % (query, param_str))
+    else:
+        sys.stderr.write(u'[info] postgres command\n')
     return pg_cur.execute(query, param)
 
-def pg_init_json(pg_cur, table_name, key_name):
-    pg_result = pg_execute(pg_cur, u"select 1 from pg_tables where schemaname='public' and tablename=%s ;", [table_name])
+def pg_init_json(pg_cur, table_name, key_name, show=True):
+    pg_result = pg_execute(pg_cur, u"select 1 from pg_tables where schemaname='public' and tablename=%s ;", [table_name], show=show)
     pg_result = pg_cur.fetchone()
     if pg_result is None:
         #sys.stderr.write(u'[info] creating table\n')
-        pg_execute(pg_cur, u"create table %s (key text unique, value text);" % (table_name))
+        pg_execute(pg_cur, u"create table %s (key text unique, value text);" % (table_name), show=show)
     elif 1 != pg_result[0] :
         raise Exception(u"exception")
 
-    pg_execute(pg_cur, u'select value from %s where key=%%s;' % table_name, [key_name])
+    pg_execute(pg_cur, u'select value from %s where key=%%s;' % table_name, [key_name], show=show)
     pg_result = pg_cur.fetchone()
     
     if pg_result is None:
-        pg_execute(pg_cur, u'insert into %s VALUES (%%s, %%s);' % table_name, [key_name, u"{}"])
+        pg_execute(pg_cur, u'insert into %s VALUES (%%s, %%s);' % table_name, [key_name, u"{}"], show=show)
         pg_data = {}
     else:
-        sys.stderr.write(u'[info] data=%s\n' % str_abbreviate(pg_result[0]))
+        if show:
+            sys.stderr.write(u'[info] data=%s\n' % str_abbreviate(pg_result[0]))
         pg_data = json.loads(pg_result[0])
     return pg_data
 
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
-    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data, ensure_ascii=False), key_name])
+    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
 def keyword2rss(keyword_list):
     rss_list = []
@@ -91,12 +95,12 @@ def get_items_from_sheet(worksheet):
 
 def update_sheet(worksheet, data):
     # worksheet.resize(1)
-    num_data = len(data)
-    sys.stderr.write("[info] update_sheet len=%s\n" % len(data))
+    len_data = len(data)
+    sys.stderr.write("[info] update_sheet len_data=%s\n" % len(data))
     worksheet.clear()
-    worksheet.resize(rows=num_data)
+    worksheet.resize(rows=len_data)
     cells = get_cells_from_sheet(worksheet)
-    for i in range(num_data):
+    for i in range(len_data):
         cells[i].value = data[i]
     worksheet.update_cells(cells)
 
@@ -110,8 +114,10 @@ def check_match(html, node_text, keyword_list):
     return False
 
 
+# f_devnull = None
 if __name__ == u'__main__':
 
+    # f_devnulll = fopen(os.devnull, "w")
     headers = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
@@ -129,7 +135,7 @@ if __name__ == u'__main__':
     pg_conn = psycopg2.connect(pg_url)
     pg_cur = pg_conn.cursor()
 
-    google_key_json = pg_init_json(pg_cur, table_name, google_key_key_name)
+    google_key_json = pg_init_json(pg_cur, table_name, google_key_key_name, show=False)
     scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
     credentials = oauth2client.service_account.ServiceAccountCredentials.from_json_keyfile_dict(google_key_json, scope)
     gc = gspread.authorize(credentials)
@@ -244,3 +250,4 @@ if __name__ == u'__main__':
     update_sheet(worksheet_checked_previously, checked_thistime)
     pg_conn.commit()
     pg_conn.close()
+    # f_devnulll.close()
