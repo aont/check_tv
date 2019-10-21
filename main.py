@@ -24,28 +24,29 @@ def str_abbreviate(str_in):
     else:
         return str_in
 
-def pg_execute(pg_cur, query, param=None, show=True):
+def pg_execute(pg_cur, query, embedparam=[], param=[], show=True):
     param_str = str_abbreviate("%s" % param)
     if show:
-        sys.stderr.write(u'[info] postgres: %s param=%s\n' % (query, param_str))
+        sys.stderr.write(u'[info] postgres: %s embedparam=%s param=%s\n' % (query, embedparam, param_str))
     else:
-        sys.stderr.write(u'[info] postgres command\n')
-    return pg_cur.execute(query, param)
+        sys.stderr.write(u'[info] postgres: %s embedparam=%s param=(hidden)\n' % (query, embedparam))
+        # sys.stderr.write(u'[info] postgres: %s\n' % (query))
+    return pg_cur.execute(query % embedparam, param)
 
 def pg_init_json(pg_cur, table_name, key_name, show=True):
-    pg_result = pg_execute(pg_cur, u"select 1 from pg_tables where schemaname='public' and tablename=%s ;", [table_name], show=show)
+    pg_result = pg_execute(pg_cur, u"select 1 from pg_tables where schemaname='public' and tablename=%%s ;", embedparam=[], param=[table_name], show=show)
     pg_result = pg_cur.fetchone()
     if pg_result is None:
         #sys.stderr.write(u'[info] creating table\n')
-        pg_execute(pg_cur, u"create table %s (key text unique, value text);" % (table_name), show=show)
+        pg_execute(pg_cur, u"create table %s (key text unique, value text);", embedparam=table_name, show=show)
     elif 1 != pg_result[0] :
         raise Exception(u"exception")
 
-    pg_execute(pg_cur, u'select value from %s where key=%%s;' % table_name, [key_name], show=show)
+    pg_execute(pg_cur, u'select value from %s where key=%%s;', embedparam=table_name, param=[key_name], show=show)
     pg_result = pg_cur.fetchone()
     
     if pg_result is None:
-        pg_execute(pg_cur, u'insert into %s VALUES (%%s, %%s);' % table_name, [key_name, u"{}"], show=show)
+        pg_execute(pg_cur, u'insert into %s VALUES (%%s, %%s);', embedparam=table_name, param=[key_name, u"{}"], show=show)
         pg_data = {}
     else:
         if show:
@@ -54,7 +55,7 @@ def pg_init_json(pg_cur, table_name, key_name, show=True):
     return pg_data
 
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
-    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;' % table_name, [json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
+    return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;', embedparam=table_name, param=[json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
 def keyword2rss(keyword_list):
     rss_list = []
