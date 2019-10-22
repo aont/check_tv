@@ -58,11 +58,12 @@ def pg_update_json(pg_cur, table_name, key_name, pg_data):
     return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;', embedparam=table_name, param=[json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
 def keyword2rss(keyword_list):
-    rss_list = []
+    # rss_list = []
     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
     for keyword in keyword_list:
-        rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0))
-    return rss_list
+        yield base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
+        # rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0))
+    # return rss_list
 
 def filter_channel(summary, filter_channels):
     for channel in filter_channels:
@@ -88,21 +89,24 @@ def get_cells_from_sheet(worksheet):
 
 def get_items_from_sheet(worksheet):
     # return [cell.value for cell in get_cells_from_sheet(worksheet)]
-    items = []
+    # items = []
     for cell in get_cells_from_sheet(worksheet):
         if cell.value:
-            items.append(cell.value)
-    return items
+            yield cell.value
+            # items.append(cell.value)
+    # return items
 
 def update_sheet(worksheet, data):
     # worksheet.resize(1)
     len_data = len(data)
     sys.stderr.write("[info] update_sheet len_data=%s\n" % len(data))
-    worksheet.clear()
     worksheet.resize(rows=len_data)
     cells = get_cells_from_sheet(worksheet)
+    for cell in cells:
+        cell.value = None
     for i in range(len_data):
         cells[i].value = data[i]
+    # worksheet.clear()
     worksheet.update_cells(cells)
 
 def check_match(html, node_text, keyword_list):
@@ -147,19 +151,19 @@ if __name__ == u'__main__':
     for worksheet in worksheets:
         if "check-tv-checked-previously"==worksheet.title:
             worksheet_checked_previously = worksheet
-            checked_previously = get_items_from_sheet(worksheet)
+            checked_previously = list(get_items_from_sheet(worksheet))
             # sys.stderr.write("[info] checked_previously=%s\n" % checked_previously)
         elif "check-tv-keyword"==worksheet.title:
             worksheet_keyword = worksheet
-            keyword_list = get_items_from_sheet(worksheet)
+            keyword_list = list(get_items_from_sheet(worksheet))
             sys.stderr.write("[info] keyword_list=%s\n" % keyword_list)
         elif "check-tv-filter-title"==worksheet.title:
             worksheet_filter_title = worksheet
-            filter_title_list = get_items_from_sheet(worksheet)
+            filter_title_list = list(get_items_from_sheet(worksheet))
             sys.stderr.write("[info] filter_title_list=%s\n" % filter_title_list)
         elif "check-tv-filter-channel"==worksheet.title:
             worksheet_filter_channel = worksheet
-            filter_channel_list = get_items_from_sheet(worksheet)
+            filter_channel_list = list(get_items_from_sheet(worksheet))
             sys.stderr.write("[info] filter_channel_list=%s\n" % filter_channel_list)
 
     # check_tv_data = pg_init_json(pg_cur, table_name, key_name)
