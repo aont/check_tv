@@ -73,8 +73,9 @@ def filter_channel(summary, filter_channels):
     return False
 
 def filter_title(title, filter_title_list):
-    if title in filter_title_list:
-        return False
+    for filter_title in filter_title_list:
+        if filter_title in title:
+            return False
     return True
 
 def check_text_match(txt, keyword_list):
