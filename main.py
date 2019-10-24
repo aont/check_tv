@@ -30,14 +30,12 @@ def pg_execute(pg_cur, query, embedparam=[], param=[], show=True):
         sys.stderr.write(u'[info] postgres: %s embedparam=%s param=%s\n' % (query, embedparam, param_str))
     else:
         sys.stderr.write(u'[info] postgres: %s embedparam=%s param=(hidden)\n' % (query, embedparam))
-        # sys.stderr.write(u'[info] postgres: %s\n' % (query))
     return pg_cur.execute(query % embedparam, param)
 
 def pg_init_json(pg_cur, table_name, key_name, show=True):
     pg_result = pg_execute(pg_cur, u"select 1 from pg_tables where schemaname='public' and tablename=%%s ;", embedparam=[], param=[table_name], show=show)
     pg_result = pg_cur.fetchone()
     if pg_result is None:
-        #sys.stderr.write(u'[info] creating table\n')
         pg_execute(pg_cur, u"create table %s (key text unique, value text);", embedparam=table_name, show=show)
     elif 1 != pg_result[0] :
         raise Exception(u"exception")
@@ -58,12 +56,9 @@ def pg_update_json(pg_cur, table_name, key_name, pg_data):
     return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;', embedparam=table_name, param=[json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
 def keyword2rss(keyword_list):
-    # rss_list = []
     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
     for keyword in keyword_list:
         yield base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
-        # rss_list.append(base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0))
-    # return rss_list
 
 def filter_channel(summary, filter_channels):
     for channel in filter_channels:
@@ -89,25 +84,34 @@ def get_cells_from_sheet(worksheet):
     return worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(worksheet.row_count, worksheet.col_count))
 
 def get_items_from_sheet(worksheet):
-    # return [cell.value for cell in get_cells_from_sheet(worksheet)]
-    # items = []
     for cell in get_cells_from_sheet(worksheet):
         if cell.value:
             yield cell.value
-            # items.append(cell.value)
-    # return items
 
 def update_sheet(worksheet, data):
-    # worksheet.resize(1)
     len_data = len(data)
     sys.stderr.write("[info] update_sheet len_data=%s\n" % len(data))
-    worksheet.resize(rows=len_data)
+    try_num = 0
+    max_try = 5
+    while True:
+        worksheet.resize(rows=len_data+10)
+        try_num += 1
+        if worksheet.row_count < len_data:
+            if try_num < max_try:
+                sys.stderr.write("[info] retry resizing\n")
+                time.sleep(1)
+                continue
+            else:
+                raise Exception("update_sheet: resize failed")
+        else:
+            break
     cells = get_cells_from_sheet(worksheet)
+    if len(cells) < len_data:
+        raise Exception("unexpected")
     for cell in cells:
         cell.value = None
     for i in range(len_data):
         cells[i].value = data[i]
-    # worksheet.clear()
     worksheet.update_cells(cells)
 
 def check_match(html, node_text, keyword_list):
@@ -119,11 +123,8 @@ def check_match(html, node_text, keyword_list):
             return True
     return False
 
-
-# f_devnull = None
 if __name__ == u'__main__':
 
-    # f_devnulll = fopen(os.devnull, "w")
     headers = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36',
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
@@ -140,8 +141,11 @@ if __name__ == u'__main__':
     sg_apikey = os.environ["SENDGRID_APIKEY"]
     pg_conn = psycopg2.connect(pg_url)
     pg_cur = pg_conn.cursor()
-
     google_key_json = pg_init_json(pg_cur, table_name, google_key_key_name, show=False)
+    pg_cur.close()
+    pg_conn.commit()
+    pg_conn.close()
+
     scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
     credentials = oauth2client.service_account.ServiceAccountCredentials.from_json_keyfile_dict(google_key_json, scope)
     gc = gspread.authorize(credentials)
@@ -153,7 +157,6 @@ if __name__ == u'__main__':
         if "check-tv-checked-previously"==worksheet.title:
             worksheet_checked_previously = worksheet
             checked_previously = list(get_items_from_sheet(worksheet))
-            # sys.stderr.write("[info] checked_previously=%s\n" % checked_previously)
         elif "check-tv-keyword"==worksheet.title:
             worksheet_keyword = worksheet
             keyword_list = list(get_items_from_sheet(worksheet))
@@ -167,23 +170,7 @@ if __name__ == u'__main__':
             filter_channel_list = list(get_items_from_sheet(worksheet))
             sys.stderr.write("[info] filter_channel_list=%s\n" % filter_channel_list)
 
-    # check_tv_data = pg_init_json(pg_cur, table_name, key_name)
-    # checked_previously = check_tv_data.get(u"checked_previously")
-    # if checked_previously is None:
-    #     checked_previously = []
     checked_thistime = []
-
-    # keyword_list = check_tv_data.get(u"keyword_list")
-    # if keyword_list is None:
-    #     keyword_list = []
-
-    # filter_channel_list = check_tv_data.get(u"filter_channel_list")
-    # if filter_channel_list is None:
-    #     filter_channel_list = []
-
-    # filter_title_list = check_tv_data.get(u"filter_title_list")
-    # if filter_title_list is None:
-    #     filter_title_list = []
 
     url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
@@ -219,10 +206,8 @@ if __name__ == u'__main__':
 
             sys.stderr.write("[url] %s\n" % entry.link)
             result = sess.get(entry.link, headers=headers)
-            # time.sleep(1)
             if result.status_code != requests.status_codes.codes.get("ok"):
                 raise Exception('unexpected')
-            #sys.stderr.write("[html]\n%s\n" % result.text)
             html = lxml.html.fromstring(result.text, base_url=entry.link)
 
             if not check_text_match(entry.title, keyword_list):
@@ -230,8 +215,6 @@ if __name__ == u'__main__':
                     if not check_match(html, "人名リンク", keyword_list):
                         if not check_match(html, "番組詳細", keyword_list):
                             sys.stderr.write("[info] skipping %s (no matching keyword)\n" % entry.link)
-                            # checked_thistime.append(url_num)
-                            # input("")
                             continue
             
             checked_thistime.append(url_num)
@@ -239,10 +222,6 @@ if __name__ == u'__main__':
             messages.append(mes)
 
     sess.close()
-    # check_tv_data[u'checked_previously'] = checked_thistime
-    # pg_update_json(pg_cur, table_name, key_name, check_tv_data)
-    
-    pg_cur.close()
 
     if len(messages)>0:
         message_str = "<br />\n".join(messages)
@@ -254,6 +233,3 @@ if __name__ == u'__main__':
         sg_client.send(message)
     
     update_sheet(worksheet_checked_previously, checked_thistime)
-    pg_conn.commit()
-    pg_conn.close()
-    # f_devnulll.close()
