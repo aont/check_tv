@@ -55,30 +55,42 @@ def pg_init_json(pg_cur, table_name, key_name, show=True):
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
     return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;', embedparam=table_name, param=[json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
-def keyword2rss(keyword_list):
+def keyword2rss(keyword):
     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
-    for keyword in keyword_list:
-        yield base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
+    return base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
 
-def filter_channel(summary, filter_channels):
+# def keyword2rss(keyword_list):
+#     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
+#     for keyword in keyword_list:
+#         yield base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
+
+def check_filter_channel_list(summary, filter_channels):
     for channel in filter_channels:
         ret = summary.find(channel)
         if ret != -1:
             return True
     return False
 
-def filter_title(title, filter_title_list):
+# def check_filter_title(title, filter_title):
+#     if filter_title in title:
+#         return False
+#     return True
+
+def check_filter_title_list(title, filter_title_list):
     for filter_title in filter_title_list:
         if filter_title in title:
             return False
     return True
 
-def check_text_match(txt, keyword_list):
-    for keyword in keyword_list:
-        if -1 != txt.find(keyword):
-            sys.stderr.write("[info] %s matches\n" % keyword)
-            return True
-    return False
+
+def get_section(html, node_text):
+    detail_node_result = html.xpath('//*[*[text() = "%s"]]' % node_text)
+    if len(detail_node_result) == 1:
+        detail_node = detail_node_result[0]
+        detail_node_html = lxml.etree.tostring(detail_node, encoding='utf-8').decode('utf-8')
+        return detail_node_html
+    raise Exception("section %s not found" % node_text)
+
 
 def get_cells_from_sheet(worksheet):
     return worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(worksheet.row_count, worksheet.col_count))
@@ -88,24 +100,77 @@ def get_items_from_sheet(worksheet):
         if cell.value:
             yield cell.value
 
+def get_db_from_sheet(worksheet):
+    row_count = worksheet.row_count
+    col_count = worksheet.col_count
+
+    cells = worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(row_count, col_count))
+    mapping = {}
+    for col_num in range(col_count):
+        cell = cells[0*col_count+col_num]
+        if cell.value:
+            mapping[cell.value] = col_num
+
+    for row_num in range(1, row_count):
+        item = {}
+        has_item = False
+        for key, col_num in mapping.items():
+            cell = cells[row_num*col_count+col_num]
+            if cell.value:
+                item[key] = cell.value
+                has_item = True
+        if has_item:
+            yield item
+
+# not tested yet
+def update_db_from_sheet(worksheet, data):
+    len_data = len(data)
+    # resize_worksheet(worksheet, len_data)
+    worksheet.resize(rows=len_data)
+    row_count = len_data
+    col_count = worksheet.col_count
+    cells = worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(row_count, col_count))
+
+    mapping = {}
+    for col_num in range(col_count):
+        cell = cells[0*col_count+col_num]
+        if cell.value:
+            mapping[cell.value] = col_num
+
+    for row_num in range(1, row_count):
+        cells[row_num*col_count+col_num].value = None
+
+    for data_num in range(len_data):
+        row_num = data_num + 1
+        data_i = data[data_num]
+        for key, col_num in mapping.items():
+            cell = cells[row_num*col_count+col_num]
+            cell.value = data_i[key]
+
+# def resize_worksheet(worksheet, rows_):
+#     rows = rows_ + 30
+#     try_num = 0
+#     max_try = 5
+#     while True:
+#         worksheet.resize(rows=rows)
+#         try_num += 1
+#         if worksheet.row_count != rows:
+#             if try_num < max_try:
+#                 sys.stderr.write("[info] retry resizing %s <- %s\n" % (rows, worksheet.row_count))
+#                 time.sleep(10)
+#                 continue
+#             else:
+#                 raise Exception("update_sheet: resize failed %s <- %s" % (rows, worksheet.row_count))
+#         else:
+#             break
+
 def update_sheet(worksheet, data):
     len_data = len(data)
     sys.stderr.write("[info] update_sheet len_data=%s\n" % len(data))
-    try_num = 0
-    max_try = 5
-    while True:
-        worksheet.resize(rows=len_data+10)
-        try_num += 1
-        if worksheet.row_count < len_data:
-            if try_num < max_try:
-                sys.stderr.write("[info] retry resizing\n")
-                time.sleep(1)
-                continue
-            else:
-                raise Exception("update_sheet: resize failed")
-        else:
-            break
-    cells = get_cells_from_sheet(worksheet)
+    worksheet.resize(rows=len_data)
+    # resize_worksheet(worksheet, len_data+10)
+    cells = worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(len_data, worksheet.col_count))
+    # cells = get_cells_from_sheet(worksheet)
     if len(cells) < len_data:
         raise Exception("unexpected")
     for cell in cells:
@@ -114,14 +179,6 @@ def update_sheet(worksheet, data):
         cells[i].value = data[i]
     worksheet.update_cells(cells)
 
-def check_match(html, node_text, keyword_list):
-    detail_node_result = html.xpath('//*[*[text() = "%s"]]' % node_text)
-    if len(detail_node_result) == 1:
-        detail_node = detail_node_result[0]
-        detail_node_html = lxml.etree.tostring(detail_node, encoding='utf-8').decode('utf-8')
-        if check_text_match(detail_node_html, keyword_list):
-            return True
-    return False
 
 if __name__ == u'__main__':
 
@@ -157,10 +214,9 @@ if __name__ == u'__main__':
         if "check-tv-checked-previously"==worksheet.title:
             worksheet_checked_previously = worksheet
             checked_previously = list(get_items_from_sheet(worksheet))
-        elif "check-tv-keyword"==worksheet.title:
-            worksheet_keyword = worksheet
-            keyword_list = list(get_items_from_sheet(worksheet))
-            sys.stderr.write("[info] keyword_list=%s\n" % keyword_list)
+        elif "check-tv-queries"==worksheet.title:
+            worksheet_queries = worksheet
+            query_db = list(get_db_from_sheet(worksheet))
         elif "check-tv-filter-title"==worksheet.title:
             worksheet_filter_title = worksheet
             filter_title_list = list(get_items_from_sheet(worksheet))
@@ -175,8 +231,13 @@ if __name__ == u'__main__':
     url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
     sess = requests.session()
-    for rssurl in keyword2rss(keyword_list):
-        sys.stderr.write(u'[info] rss=%s\n' % rssurl) 
+    
+    for query in query_db:
+        keyword = query.get("keyword")
+        if keyword is None:
+            raise Exception("keyword is None")
+        title_exclude = query.get("title-exclude")
+        rssurl = keyword2rss(keyword)
         d = feedparser.parse(rssurl)
 
         for entry in d['entries']:
@@ -186,6 +247,7 @@ if __name__ == u'__main__':
 
             if url_match is None:
                 raise Exception(u'unexpected')
+
             if url_num in checked_thistime:
                 sys.stderr.write("[info] skipping %s (duplicate)\n" % (entry.title))
                 continue
@@ -194,26 +256,31 @@ if __name__ == u'__main__':
                 sys.stderr.write("[info] skipping %s (checked previously)\n" % (entry.title))
                 checked_thistime.append(url_num)
                 continue
-            elif not filter_channel(entry.summary, filter_channel_list):
+
+            if title_exclude and (title_exclude in entry.title):
+                sys.stderr.write("[info] skipping  %s (title is filtered)\n" % (entry.title))
+                # checked_thistime.append(url_num)
+                continue
+
+            if not check_filter_channel_list(entry.summary, filter_channel_list):
                 sys.stderr.write("[info] skipping  %s (%s) (channnel is filtered)\n" % (entry.title, entry.summary))
                 checked_thistime.append(url_num)
                 continue
-            elif not filter_title(entry.title, filter_title_list):
-                sys.stderr.write("[info] skipping  %s (program is filtered)\n" % (entry.title))
+
+            if not check_filter_title_list(entry.title, filter_title_list):
+                sys.stderr.write("[info] skipping  %s (title is filtered)\n" % (entry.title))
                 checked_thistime.append(url_num)
                 continue
 
-
             sys.stderr.write("[url] %s\n" % entry.link)
             result = sess.get(entry.link, headers=headers)
-            if result.status_code != requests.status_codes.codes.get("ok"):
-                raise Exception('unexpected')
+            result.raise_for_status()
             html = lxml.html.fromstring(result.text, base_url=entry.link)
 
-            if not check_text_match(entry.title, keyword_list):
-                if not check_match(html, "番組概要", keyword_list):
-                    if not check_match(html, "人名リンク", keyword_list):
-                        if not check_match(html, "番組詳細", keyword_list):
+            if not keyword in entry.title:
+                if not keyword in get_section(html, "番組概要"):
+                    if not keyword in get_section(html, "人名リンク"):
+                        if not keyword in get_section(html, "番組詳細"):
                             sys.stderr.write("[info] skipping %s (no matching keyword)\n" % entry.link)
                             continue
             
