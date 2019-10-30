@@ -15,7 +15,7 @@ import lxml.html
 import time
 import gspread
 import oauth2client.service_account
-
+import html
 
 def str_abbreviate(str_in):
     len_str_in = len(str_in)
@@ -275,17 +275,17 @@ if __name__ == u'__main__':
             sys.stderr.write("[url] %s\n" % entry.link)
             result = sess.get(entry.link, headers=headers)
             result.raise_for_status()
-            html = lxml.html.fromstring(result.text, base_url=entry.link)
+            program_html = lxml.html.fromstring(result.text, base_url=entry.link)
 
             if not keyword in entry.title:
-                if not keyword in get_section(html, "番組概要"):
-                    if not keyword in get_section(html, "人名リンク"):
-                        if not keyword in get_section(html, "番組詳細"):
+                if not keyword in get_section(program_html, "番組概要"):
+                    if not keyword in get_section(program_html, "人名リンク"):
+                        if not keyword in get_section(program_html, "番組詳細"):
                             sys.stderr.write("[info] skipping %s (no matching keyword)\n" % entry.link)
                             continue
             
             checked_thistime.append(url_num)
-            mes = u"<a href=\"%s\">%s</a>" % (entry.link, entry.title)
+            mes = u"<a href=\"%s\">%s</a>" % (entry.link, html.escape(entry.title))
             messages.append(mes)
 
     sess.close()
