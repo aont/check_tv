@@ -285,7 +285,7 @@ if __name__ == u'__main__':
                             continue
             
             checked_thistime.append(url_num)
-            mes = u"<a href=\"%s\">%s</a>" % (entry.link, html.escape(entry.title))
+            mes = u"<a href=\"%s\">%s</a> （%s）" % (entry.link, html.escape(entry.title), keyword)
             messages.append(mes)
 
     sess.close()
