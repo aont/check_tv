@@ -240,6 +240,8 @@ if __name__ == u'__main__':
         rssurl = keyword2rss(keyword)
         d = feedparser.parse(rssurl)
 
+        datetime_now = datetime.datetime.now()
+        delta_days_th = 6
         for entry in d['entries']:
 
             url_match = url_pat.match(entry.link)
@@ -259,17 +261,21 @@ if __name__ == u'__main__':
 
             if title_exclude and (title_exclude in entry.title):
                 sys.stderr.write("[info] skipping  %s (title is filtered)\n" % (entry.title))
-                # checked_thistime.append(url_num)
                 continue
 
             if not check_filter_channel_list(entry.summary, filter_channel_list):
                 sys.stderr.write("[info] skipping  %s (%s) (channnel is filtered)\n" % (entry.title, entry.summary))
-                checked_thistime.append(url_num)
                 continue
 
             if not check_filter_title_list(entry.title, filter_title_list):
                 sys.stderr.write("[info] skipping  %s (title is filtered)\n" % (entry.title))
-                checked_thistime.append(url_num)
+                continue
+
+            date_datetime = datetime.datetime.strptime(entry.date, "%Y-%m-%dT%H:%M+09:00")
+            delta_time = date_datetime - datetime_now
+
+            if delta_time.days > delta_days_th:
+                sys.stderr.write("[info] skipping %s (delta_days=%s > %s)\n" % (entry.title, delta_time.days, delta_days_th))
                 continue
 
             sys.stderr.write("[url] %s\n" % entry.link)
