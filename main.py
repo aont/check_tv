@@ -42,7 +42,7 @@ def pg_init_json(pg_cur, table_name, key_name, show=True):
 
     pg_execute(pg_cur, u'select value from %s where key=%%s;', embedparam=table_name, param=[key_name], show=show)
     pg_result = pg_cur.fetchone()
-    
+
     if pg_result is None:
         pg_execute(pg_cur, u'insert into %s VALUES (%%s, %%s);', embedparam=table_name, param=[key_name, u"{}"], show=show)
         pg_data = {}
@@ -89,8 +89,9 @@ def get_section(html, node_text):
         detail_node = detail_node_result[0]
         detail_node_html = lxml.etree.tostring(detail_node, encoding='utf-8').decode('utf-8')
         return detail_node_html
-    raise Exception("section %s not found" % node_text)
-
+    else:
+        sys.stderr.write("[warn] section %s not found\n" % node_text)
+        return ""
 
 def get_cells_from_sheet(worksheet):
     return worksheet.range(gspread.utils.rowcol_to_a1(1, 1)+":"+gspread.utils.rowcol_to_a1(worksheet.row_count, worksheet.col_count))
@@ -231,7 +232,7 @@ if __name__ == u'__main__':
     url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
     sess = requests.session()
-    
+
     for query in query_db:
         keyword = query.get("keyword")
         if keyword is None:
@@ -289,7 +290,7 @@ if __name__ == u'__main__':
                         if not keyword in get_section(program_html, "番組詳細"):
                             sys.stderr.write("[info] skipping %s (no matching keyword)\n" % entry.link)
                             continue
-            
+
             checked_thistime.append(url_num)
             mes = u"<a href=\"%s\">%s</a> （%s）" % (entry.link, html.escape(entry.title), keyword)
             messages.append(mes)
@@ -304,5 +305,5 @@ if __name__ == u'__main__':
         message = sendgrid.Mail(from_email=sg_from, to_emails=[sg_recipient], subject=u"Update of TV Programs", html_content=message_str)
         message.reply_to = sg_recipient
         sg_client.send(message)
-    
+
     update_sheet(worksheet_checked_previously, checked_thistime)
