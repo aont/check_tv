@@ -280,8 +280,21 @@ if __name__ == u'__main__':
                 continue
 
             sys.stderr.write("[url] %s\n" % entry.link)
-            result = sess.get(entry.link, headers=headers)
-            result.raise_for_status()
+            max_retry = 3
+            sleep_dur = 5
+            for t in range(max_retry):
+                try:
+                    result = sess.get(entry.link, headers=headers)
+                    result.raise_for_status()
+                    break
+                except Exception as e:
+                    if t>max_retry-1:
+                        raise e
+                    else:
+                        sys.stderr.write("[warn] sleep and retry\n")
+                        time.sleep(sleep_dur)
+                        continue
+
             program_html = lxml.html.fromstring(result.text, base_url=entry.link)
 
             if not keyword in entry.title:
