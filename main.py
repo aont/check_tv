@@ -288,7 +288,7 @@ if __name__ == u'__main__':
                     result.raise_for_status()
                     break
                 except Exception as e:
-                    if t>max_retry-1:
+                    if t>max_retry-2:
                         raise e
                     else:
                         sys.stderr.write("[warn] sleep and retry\n")
