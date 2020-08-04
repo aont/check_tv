@@ -55,12 +55,14 @@ def pg_init_json(pg_cur, table_name, key_name, show=True):
 def pg_update_json(pg_cur, table_name, key_name, pg_data):
     return pg_execute(pg_cur, u'update %s set value = %%s where key = %%s;', embedparam=table_name, param=[json.dumps(pg_data, ensure_ascii=False), key_name], show=show)
 
+TVKINGDOM='www.tvkingdom.jp'
+
 def keyword2rss(keyword):
-    base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
+    base_url = "https://"+TVKINGDOM+"/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
     return base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
 
 # def keyword2rss(keyword_list):
-#     base_url = u"https://tv.so-net.ne.jp/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
+#     base_url = "https://"+TVKINGDOM+"/rss/schedulesBySearch.action?condition.genres%5B0%5D.parentId=-1&condition.genres%5B0%5D.childId=-1&submit=%E6%A4%9C%E7%B4%A2&stationAreaId=23&submit.x=&submit.y="
 #     for keyword in keyword_list:
 #         yield base_url + "&condition.keyword=%s&stationPlatformId=%s" % (urllib.parse.quote(keyword, safe=''), 0)
 
@@ -188,7 +190,7 @@ if __name__ == u'__main__':
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
         'accept-encoding': 'gzip, deflate, br',
         'accept-language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
-        'referer': 'https://tv.so-net.ne.jp/',
+        'referer': 'https://'+TVKINGDOM+'/',
     }
     pg_url = os.environ[u'DATABASE_URL']
     table_name = u'generic_text_data'
@@ -229,7 +231,7 @@ if __name__ == u'__main__':
 
     checked_thistime = []
 
-    url_pat=re.compile(u'https://tv.so-net.ne.jp/schedule/(\\d+)\\.action\\?from=rss')
+    url_pat=re.compile('https://'+TVKINGDOM+'/schedule/(\\d+)\\.action\\?from=rss')
     messages = []
     sess = requests.session()
 
