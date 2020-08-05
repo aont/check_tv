@@ -248,10 +248,9 @@ if __name__ == u'__main__':
         for entry in d['entries']:
 
             url_match = url_pat.match(entry.link)
-            url_num = url_match.group(1)
-
             if url_match is None:
-                raise Exception(u'unexpected')
+                raise Exception(u'url_pat match failed')
+            url_num = url_match.group(1)
 
             if url_num in checked_thistime:
                 sys.stderr.write("[info] skipping %s (duplicate)\n" % (entry.title))
